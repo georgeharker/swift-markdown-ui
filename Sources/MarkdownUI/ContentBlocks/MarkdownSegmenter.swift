@@ -133,7 +133,7 @@ extension MarkdownProseStyle {
 
   fileprivate func base(size: CGFloat, weight: Font.Weight) -> AttributeContainer {
     var properties = FontProperties()
-    properties.family = .system()
+    properties.family = fontName.map { .custom($0) } ?? .system()
     properties.size = size
     properties.weight = weight
     var container = AttributeContainer()

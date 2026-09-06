@@ -9,14 +9,18 @@ public struct MarkdownProseStyle: Sendable {
   public var baseSize: CGFloat
   public var textColor: Color
   public var linkColor: Color
+  /// Custom body font family (PostScript/registered name). `nil` = system.
+  public var fontName: String?
 
   public init(
     baseSize: CGFloat = 16,
     textColor: Color = .primary,
-    linkColor: Color = .accentColor
+    linkColor: Color = .accentColor,
+    fontName: String? = nil
   ) {
     self.baseSize = baseSize
     self.textColor = textColor
     self.linkColor = linkColor
+    self.fontName = fontName
   }
 }
