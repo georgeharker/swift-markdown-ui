@@ -128,16 +128,18 @@ private func taskListModel(
 extension MarkdownProseStyle {
   fileprivate var inlineStyles: InlineTextStyles {
     InlineTextStyles(
-      code: Self.codeStyle(color: codeColor, background: codeBackground),
+      code: Self.codeStyle(fontName: codeFontName, color: codeColor, background: codeBackground),
       emphasis: FontStyle(.italic),
       strong: FontWeight(.semibold),
       strikethrough: StrikethroughStyle(.single),
       link: ForegroundColor(linkColor))
   }
 
+  // Explicit mono FAMILY (not FontFamilyVariant.monospaced) — a custom body
+  // font has no monospaced variant, so inline `code` would fall back to body.
   @TextStyleBuilder
-  fileprivate static func codeStyle(color: Color?, background: Color?) -> some TextStyle {
-    FontFamilyVariant(.monospaced)
+  fileprivate static func codeStyle(fontName: String?, color: Color?, background: Color?) -> some TextStyle {
+    FontFamily(fontName.map { .custom($0) } ?? .system(.monospaced))
     ForegroundColor(color)
     BackgroundColor(background)
   }
