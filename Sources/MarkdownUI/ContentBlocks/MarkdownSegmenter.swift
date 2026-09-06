@@ -4,18 +4,24 @@ import SwiftUI
 ///
 /// PURE + off-main safe: parsing is cmark, prose styling uses value-type
 /// `TextStyle` DSL, and no SwiftUI `Environment` is touched. Flowable blocks
-/// (paragraph, heading) coalesce into `.prose(AttributedString)`; codeBlock /
-/// table / thematicBreak become data entities; lists / blockquote / html fall
-/// to `.raw` plaintext in v1 (styled block walkers come next).
+/// (paragraph, heading, html) coalesce into `.prose(AttributedString)`;
+/// codeBlock / table / thematicBreak become data entities; lists + blockquotes
+/// become structural entities whose text is still styled off-main (the walker
+/// recurses through their children).
 public func markdownEntities(_ markdown: String, style: MarkdownProseStyle) -> [MarkdownEntity] {
-  let blocks = [BlockNode](markdown: markdown)
+  entities(for: [BlockNode](markdown: markdown), style: style)
+}
+
+// MARK: - Recursive walk
+
+private func entities(for blocks: [BlockNode], style: MarkdownProseStyle) -> [MarkdownEntity] {
   let styles = style.inlineStyles
-  var entities: [MarkdownEntity] = []
+  var out: [MarkdownEntity] = []
   var prose = AttributedString()
 
-  func flushProse() {
+  func flush() {
     if !prose.characters.isEmpty {
-      entities.append(.prose(prose))
+      out.append(.prose(prose))
       prose = AttributedString()
     }
   }
@@ -33,40 +39,87 @@ public func markdownEntities(_ markdown: String, style: MarkdownProseStyle) -> [
                     styles: styles)
       prose += AttributedString("\n\n")
 
+    case .htmlBlock(let content):
+      // MarkdownUI treats an html block as a paragraph; unknown tags show as
+      // text. Keep it in the prose run.
+      var seg = AttributedString(content.trimmingCharacters(in: .newlines) + "\n\n")
+      seg.mergeAttributes(style.base(size: style.baseSize, weight: .regular))
+      prose += seg
+
     case .codeBlock(let fenceInfo, let content):
-      flushProse()
-      entities.append(.code(language: fenceInfo, text: content))
+      flush()
+      out.append(.code(language: fenceInfo, text: content))
 
     case .thematicBreak:
-      flushProse()
-      entities.append(.thematicBreak)
+      flush()
+      out.append(.thematicBreak)
 
     case .table(let columnAlignments, let rows):
-      flushProse()
-      let base = style.base(size: style.baseSize, weight: .regular)
-      let cells = rows.map { row in
-        row.cells.map { cell -> AttributedString in
-          var a = AttributedString()
-          appendInlines(cell.content, to: &a, base: base, styles: styles)
-          return a
-        }
-      }
-      entities.append(
-        .table(
-          MarkdownTableModel(
-            alignments: columnAlignments.map(MarkdownTableModel.Alignment.init),
-            rows: cells)))
+      flush()
+      out.append(.table(tableModel(columnAlignments, rows, style: style, styles: styles)))
 
-    default:
-      flushProse()
-      entities.append(.raw(plainText: [block].renderPlainText()))
+    case .bulletedList(_, let items):
+      flush()
+      out.append(.list(listModel(.bulleted, items: items, style: style)))
+
+    case .numberedList(_, let start, let items):
+      flush()
+      out.append(.list(listModel(.numbered(start: start), items: items, style: style, start: start)))
+
+    case .taskList(_, let items):
+      flush()
+      out.append(.list(taskListModel(items, style: style)))
+
+    case .blockquote(let children):
+      flush()
+      out.append(.blockquote(entities(for: children, style: style)))
     }
   }
-  flushProse()
-  return entities
+  flush()
+  return out
 }
 
-// MARK: - Internal helpers (in-module: uses MarkdownUI's internal types)
+// MARK: - Structural models
+
+private func tableModel(
+  _ alignments: [RawTableColumnAlignment], _ rows: [RawTableRow],
+  style: MarkdownProseStyle, styles: InlineTextStyles
+) -> MarkdownTableModel {
+  let base = style.base(size: style.baseSize, weight: .regular)
+  let cells = rows.map { row in
+    row.cells.map { cell -> AttributedString in
+      var attributed = AttributedString()
+      appendInlines(cell.content, to: &attributed, base: base, styles: styles)
+      return attributed
+    }
+  }
+  return MarkdownTableModel(alignments: alignments.map(MarkdownTableModel.Alignment.init), rows: cells)
+}
+
+private func listModel(
+  _ kind: MarkdownListModel.Kind, items: [RawListItem],
+  style: MarkdownProseStyle, start: Int = 1
+) -> MarkdownListModel {
+  let modelItems = items.enumerated().map { index, item -> MarkdownListModel.Item in
+    let marker: String
+    if case .numbered = kind { marker = "\(start + index)." } else { marker = "\u{2022}" }
+    return MarkdownListModel.Item(marker: marker, checked: nil,
+                                  content: entities(for: item.children, style: style))
+  }
+  return MarkdownListModel(kind: kind, items: modelItems)
+}
+
+private func taskListModel(_ items: [RawTaskListItem], style: MarkdownProseStyle) -> MarkdownListModel {
+  let modelItems = items.map { item in
+    MarkdownListModel.Item(
+      marker: item.isCompleted ? "\u{2611}" : "\u{2610}",
+      checked: item.isCompleted,
+      content: entities(for: item.children, style: style))
+  }
+  return MarkdownListModel(kind: .task, items: modelItems)
+}
+
+// MARK: - Inline helpers (in-module: uses MarkdownUI's internal types)
 
 extension MarkdownProseStyle {
   fileprivate var inlineStyles: InlineTextStyles {
@@ -79,14 +132,14 @@ extension MarkdownProseStyle {
   }
 
   fileprivate func base(size: CGFloat, weight: Font.Weight) -> AttributeContainer {
-    var fp = FontProperties()
-    fp.family = .system()
-    fp.size = size
-    fp.weight = weight
-    var c = AttributeContainer()
-    c.fontProperties = fp
-    c.foregroundColor = textColor
-    return c
+    var properties = FontProperties()
+    properties.family = .system()
+    properties.size = size
+    properties.weight = weight
+    var container = AttributeContainer()
+    container.fontProperties = properties
+    container.foregroundColor = textColor
+    return container
   }
 }
 

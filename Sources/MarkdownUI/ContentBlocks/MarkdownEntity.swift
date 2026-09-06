@@ -5,27 +5,30 @@ import Foundation
 /// Produced off-main by ``markdownEntities(_:style:)``. Flowable prose is
 /// already materialized to an `AttributedString`; structural entities carry
 /// DATA (not views), so the caller plugs its own materialization — a syntax
-/// highlighter for `.code`, a grid for `.table`, an image loader for images.
+/// highlighter for `.code`, a grid for `.table`, marker columns for `.list`, a
+/// bar for `.blockquote`, an image loader for images.
 ///
 /// The list is a value type (`Hashable`, `Sendable`), so it can be cached or
 /// persisted per message and re-materialized without re-parsing.
-public enum MarkdownEntity: Hashable, Sendable {
-  /// A coalesced run of flowable blocks (paragraphs, headings, …), styled.
+public indirect enum MarkdownEntity: Hashable, Sendable {
+  /// A coalesced run of flowable blocks (paragraphs, headings, html), styled.
   case prose(AttributedString)
   /// A fenced code block — deferred to the caller's highlighter.
   case code(language: String?, text: String)
   /// A table's structured data (pre-styled cells + alignments).
   case table(MarkdownTableModel)
+  /// A list — marker column + per-item content (items recurse).
+  case list(MarkdownListModel)
+  /// A blockquote — recursive children, rendered behind a bar by the caller.
+  case blockquote([MarkdownEntity])
   /// A horizontal rule.
   case thematicBreak
-  /// A block not yet flattened to prose (lists / blockquote / html in v1, or a
-  /// nested-structural island): its plain text, for a caller fallback.
+  /// A node the walker couldn't flatten (reserved fallback; unused in practice).
   case raw(plainText: String)
 }
 
 /// Structured table data: pre-styled cells + per-column alignment. The grid
-/// layout is the caller's to render (only the 2D layout must stay on the main
-/// actor; the cell styling was done off-main).
+/// layout is the caller's to render; the cell styling was done off-main.
 public struct MarkdownTableModel: Hashable, Sendable {
   public enum Alignment: Hashable, Sendable {
     case none, left, center, right
@@ -37,5 +40,37 @@ public struct MarkdownTableModel: Hashable, Sendable {
   public init(alignments: [Alignment], rows: [[AttributedString]]) {
     self.alignments = alignments
     self.rows = rows
+  }
+}
+
+/// Structured list data: a kind + items. Each item carries a marker string
+/// (bullet / number / checkbox) and its own recursively-walked content (usually
+/// one `.prose`, but may nest a `.list` or hold a `.code`). The caller lays out
+/// the marker column; the item text was styled off-main.
+public struct MarkdownListModel: Hashable, Sendable {
+  public enum Kind: Hashable, Sendable {
+    case bulleted
+    case numbered(start: Int)
+    case task
+  }
+
+  public struct Item: Hashable, Sendable {
+    public var marker: String
+    public var checked: Bool?           // task items only
+    public var content: [MarkdownEntity]
+
+    public init(marker: String, checked: Bool?, content: [MarkdownEntity]) {
+      self.marker = marker
+      self.checked = checked
+      self.content = content
+    }
+  }
+
+  public var kind: Kind
+  public var items: [Item]
+
+  public init(kind: Kind, items: [Item]) {
+    self.kind = kind
+    self.items = items
   }
 }
