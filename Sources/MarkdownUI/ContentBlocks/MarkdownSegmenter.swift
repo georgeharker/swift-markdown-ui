@@ -59,17 +59,18 @@ private func entities(for blocks: [BlockNode], style: MarkdownProseStyle) -> [Ma
       flush()
       out.append(.table(tableModel(columnAlignments, rows, style: style, styles: styles)))
 
-    case .bulletedList(_, let items):
+    case .bulletedList(let isTight, let items):
       flush()
-      out.append(.list(listModel(.bulleted, items: items, style: style)))
+      out.append(.list(listModel(.bulleted, isTight: isTight, items: items, style: style)))
 
-    case .numberedList(_, let start, let items):
+    case .numberedList(let isTight, let start, let items):
       flush()
-      out.append(.list(listModel(.numbered(start: start), items: items, style: style, start: start)))
+      out.append(.list(listModel(.numbered(start: start), isTight: isTight,
+                                 items: items, style: style, start: start)))
 
-    case .taskList(_, let items):
+    case .taskList(let isTight, let items):
       flush()
-      out.append(.list(taskListModel(items, style: style)))
+      out.append(.list(taskListModel(isTight: isTight, items: items, style: style)))
 
     case .blockquote(let children):
       flush()
@@ -98,7 +99,7 @@ private func tableModel(
 }
 
 private func listModel(
-  _ kind: MarkdownListModel.Kind, items: [RawListItem],
+  _ kind: MarkdownListModel.Kind, isTight: Bool, items: [RawListItem],
   style: MarkdownProseStyle, start: Int = 1
 ) -> MarkdownListModel {
   let modelItems = items.enumerated().map { index, item -> MarkdownListModel.Item in
@@ -107,17 +108,19 @@ private func listModel(
     return MarkdownListModel.Item(marker: marker, checked: nil,
                                   content: entities(for: item.children, style: style))
   }
-  return MarkdownListModel(kind: kind, items: modelItems)
+  return MarkdownListModel(kind: kind, isTight: isTight, items: modelItems)
 }
 
-private func taskListModel(_ items: [RawTaskListItem], style: MarkdownProseStyle) -> MarkdownListModel {
+private func taskListModel(
+  isTight: Bool, items: [RawTaskListItem], style: MarkdownProseStyle
+) -> MarkdownListModel {
   let modelItems = items.map { item in
     MarkdownListModel.Item(
       marker: item.isCompleted ? "\u{2611}" : "\u{2610}",
       checked: item.isCompleted,
       content: entities(for: item.children, style: style))
   }
-  return MarkdownListModel(kind: .task, items: modelItems)
+  return MarkdownListModel(kind: .task, isTight: isTight, items: modelItems)
 }
 
 // MARK: - Inline helpers (in-module: uses MarkdownUI's internal types)

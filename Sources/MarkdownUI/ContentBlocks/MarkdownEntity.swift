@@ -67,10 +67,14 @@ public struct MarkdownListModel: Hashable, Sendable {
   }
 
   public var kind: Kind
+  /// A tight list (no blank lines between items) renders compactly; a loose
+  /// list gets paragraph-sized gaps — mirrors CommonMark / MarkdownUI.
+  public var isTight: Bool
   public var items: [Item]
 
-  public init(kind: Kind, items: [Item]) {
+  public init(kind: Kind, isTight: Bool, items: [Item]) {
     self.kind = kind
+    self.isTight = isTight
     self.items = items
   }
 }
