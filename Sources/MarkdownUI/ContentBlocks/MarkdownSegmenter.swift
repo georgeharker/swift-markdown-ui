@@ -128,11 +128,18 @@ private func taskListModel(
 extension MarkdownProseStyle {
   fileprivate var inlineStyles: InlineTextStyles {
     InlineTextStyles(
-      code: FontFamilyVariant(.monospaced),
+      code: Self.codeStyle(color: codeColor, background: codeBackground),
       emphasis: FontStyle(.italic),
       strong: FontWeight(.semibold),
       strikethrough: StrikethroughStyle(.single),
       link: ForegroundColor(linkColor))
+  }
+
+  @TextStyleBuilder
+  fileprivate static func codeStyle(color: Color?, background: Color?) -> some TextStyle {
+    FontFamilyVariant(.monospaced)
+    ForegroundColor(color)
+    BackgroundColor(background)
   }
 
   fileprivate func base(size: CGFloat, weight: Font.Weight) -> AttributeContainer {

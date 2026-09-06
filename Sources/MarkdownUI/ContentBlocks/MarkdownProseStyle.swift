@@ -9,6 +9,9 @@ public struct MarkdownProseStyle: Sendable {
   public var baseSize: CGFloat
   public var textColor: Color
   public var linkColor: Color
+  /// Inline `code` foreground / background chip. `nil` = inherit / none.
+  public var codeColor: Color?
+  public var codeBackground: Color?
   /// Custom body font family (PostScript/registered name). `nil` = system.
   public var fontName: String?
 
@@ -16,11 +19,15 @@ public struct MarkdownProseStyle: Sendable {
     baseSize: CGFloat = 16,
     textColor: Color = .primary,
     linkColor: Color = .accentColor,
+    codeColor: Color? = nil,
+    codeBackground: Color? = nil,
     fontName: String? = nil
   ) {
     self.baseSize = baseSize
     self.textColor = textColor
     self.linkColor = linkColor
+    self.codeColor = codeColor
+    self.codeBackground = codeBackground
     self.fontName = fontName
   }
 }
