@@ -3,6 +3,34 @@
 [![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fgonzalezreal%2Fswift-markdown-ui%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/gonzalezreal/swift-markdown-ui)
 [![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fgonzalezreal%2Fswift-markdown-ui%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/gonzalezreal/swift-markdown-ui)
 
+---
+
+> ## Fork: `un-bien-fork` (purely additive)
+>
+> This is a fork of [gonzalezreal/swift-markdown-ui](https://github.com/gonzalezreal/swift-markdown-ui) for the **un-bien** app. It is **add-only**: no upstream source file is modified, added-to, or deleted, so **every original MarkdownUI API and behaviour is maintained unchanged**. The entire diff vs the upstream `2.4.1` tag is one new directory (`git diff 2.4.1..un-bien-fork` = 3 files added, 0 changed).
+>
+> ### What's extra: `Sources/MarkdownUI/ContentBlocks/`
+>
+> A first-class **parse → storable entities** API for rendering Markdown **off the main thread**:
+>
+> - **`markdownEntities(_:style:) -> [MarkdownEntity]`** — parses a document (pure cmark, off-main-safe) and delineates it into a flat list of storable entities, materialising flowable prose to a themed `AttributedString` up front.
+> - **`MarkdownEntity`** — `.prose(AttributedString)` (already styled), `.code(language:text:)`, `.table(MarkdownTableModel)`, `.thematicBreak`, `.raw(plainText:)`. Structural entities carry **data, not views**, so the caller plugs its own materialisation (a syntax highlighter, a grid, an image loader).
+> - **`MarkdownProseStyle`** — plain caller-supplied styling (base size + text/link colour); the segmenter builds MarkdownUI's internal `InlineTextStyles` from it, so **no MarkdownUI-internal type leaks into the public API**.
+>
+> ### Why
+>
+> It lets an app produce the expensive parse + inline styling on a background queue and render settled Markdown as one cached `Text` per prose run — keeping fast scroll jank-free (measured: 0 dropped frames vs the live view's 72% under a fast fling). The segmenter lives **inside** the module, so it reuses MarkdownUI's own cmark parser, inline `AttributedString` renderer, and `TextStyle` DSL directly — which is why the change stays add-only.
+>
+> ### Coverage & caveats (v1)
+>
+> Flowable blocks (paragraph, heading) coalesce into `.prose`; `codeBlock`/`table`/`thematicBreak` become data entities; **lists / blockquote / html currently fall to `.raw` plaintext** (styled block walkers are the next step). Nested-structural handling and streaming settle-swap are the caller's concern.
+>
+> ### Syncing upstream
+>
+> Rebase `un-bien-fork` on a newer upstream tag; only the three `ContentBlocks/` files re-apply.
+
+---
+
 Display and customize Markdown text in SwiftUI.
 
 * [Overview](#overview)
