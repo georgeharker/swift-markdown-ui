@@ -27,8 +27,8 @@
 >
 > ### Known holes
 >
-> - **Images** — inline and block `![alt](url)` render as their **alt text only**. `AttributedString` can't hold an image, so there is no image entity (MarkdownUI loads images via `NetworkImage`).
-> - **Raw HTML** — inline `<br>` is handled; other raw HTML tags fall through as **plain text**, not parsed or rendered.
+> - **Images** — inline `![alt](url)` renders as **alt text only** (`AttributedString` can't hold an image, so there is no image entity). In practice that's usually right: LLM-emitted inline image URLs are typically placeholder/hallucinated, and *real* images arrive as **separate content blocks bound positionally**, not referenced from the markdown — splice those in alongside the entity list yourself.
+> - **Raw HTML** — LLMs emit raw HTML **unfenced** (`<br>` in table cells, `<details>`, `<sub>`/`<sup>`), so a consumer needs a policy. Here: inline `<br>` is handled by the inline renderer; block / unknown HTML falls through as **plain text**, not parsed or rendered.
 > - **Streaming** — the entity path is for *settled* documents; while a message streams, render live and settle-swap to entities.
 >
 > ### Syncing upstream
