@@ -29,20 +29,21 @@ private func entities(for blocks: [BlockNode], style: MarkdownProseStyle) -> [Ma
   for block in blocks {
     switch block {
     case .paragraph(let inlines):
+      proseSeparator(&prose)
       appendInlines(inlines, to: &prose,
                     base: style.base(size: style.baseSize, weight: .regular), styles: styles)
-      prose += AttributedString("\n\n")
 
     case .heading(let level, let inlines):
+      proseSeparator(&prose)
       appendInlines(inlines, to: &prose,
                     base: style.base(size: style.baseSize * headingScale(level), weight: .bold),
                     styles: styles)
-      prose += AttributedString("\n\n")
 
     case .htmlBlock(let content):
       // MarkdownUI treats an html block as a paragraph; unknown tags show as
       // text. Keep it in the prose run.
-      var seg = AttributedString(content.trimmingCharacters(in: .newlines) + "\n\n")
+      proseSeparator(&prose)
+      var seg = AttributedString(content.trimmingCharacters(in: .newlines))
       seg.mergeAttributes(style.base(size: style.baseSize, weight: .regular))
       prose += seg
 
@@ -141,6 +142,12 @@ extension MarkdownProseStyle {
     container.foregroundColor = textColor
     return container
   }
+}
+
+/// A blank line BETWEEN flowable blocks (never trailing) so a prose run
+/// doesn't accumulate empty space before the next entity.
+private func proseSeparator(_ prose: inout AttributedString) {
+  if !prose.characters.isEmpty { prose += AttributedString("\n\n") }
 }
 
 private func appendInlines(
