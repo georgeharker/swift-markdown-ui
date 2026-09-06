@@ -23,6 +23,10 @@ public indirect enum MarkdownEntity: Hashable, Sendable {
   case list(MarkdownListModel)
   /// A blockquote — recursive children, rendered behind a bar by the caller.
   case blockquote([MarkdownEntity])
+  /// A `<details>`/`<summary>` disclosure — a summary header + recursive body.
+  /// Rendered as a FIXED-HEIGHT callout (never collapsible): a windowed
+  /// transcript freezes row heights offscreen, so a togglable height breaks it.
+  case details(summary: AttributedString, children: [MarkdownEntity])
   /// A horizontal rule.
   case thematicBreak
   /// A node the walker couldn't flatten (reserved fallback; unused in practice).

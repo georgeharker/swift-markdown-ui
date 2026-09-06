@@ -26,7 +26,46 @@ private func entities(for blocks: [BlockNode], style: MarkdownProseStyle) -> [Ma
     }
   }
 
-  for block in blocks {
+  var i = 0
+  while i < blocks.count {
+    let block = blocks[i]
+
+    // <details>/<summary> -> a fixed-height callout entity. cmark splits the
+    // construct across htmlBlock(<details>..<summary>..) / markdown body /
+    // htmlBlock(</details>) at blank lines; collect the body between them.
+    if case .htmlBlock(let content) = block,
+       content.range(of: "<details", options: [.caseInsensitive]) != nil {
+      flush()
+      var summaryText = extractSummary(content)
+      var body: [BlockNode] = []
+      if content.range(of: "</details", options: [.caseInsensitive]) != nil {
+        let inline = detailsInlineBody(content)
+        if !inline.isEmpty { body = [BlockNode](markdown: inline) }
+        i += 1
+      } else {
+        i += 1
+        while i < blocks.count {
+          if case .htmlBlock(let c) = blocks[i],
+             c.range(of: "</details", options: [.caseInsensitive]) != nil {
+            i += 1
+            break
+          }
+          if case .htmlBlock(let c) = blocks[i],
+             c.range(of: "<summary", options: [.caseInsensitive]) != nil {
+            if summaryText.isEmpty { summaryText = extractSummary(c) }
+            i += 1
+            continue
+          }
+          body.append(blocks[i])
+          i += 1
+        }
+      }
+      var summary = AttributedString(summaryText.isEmpty ? "Details" : summaryText)
+      summary.mergeAttributes(style.base(size: style.baseSize, weight: .semibold))
+      out.append(.details(summary: summary, children: entities(for: body, style: style)))
+      continue
+    }
+
     switch block {
     case .paragraph(let inlines):
       proseSeparator(&prose)
@@ -80,6 +119,7 @@ private func entities(for blocks: [BlockNode], style: MarkdownProseStyle) -> [Ma
       if let quoteColor = style.quoteColor { quoted.textColor = quoteColor }
       out.append(.blockquote(entities(for: children, style: quoted)))
     }
+    i += 1
   }
   flush()
   return out
@@ -170,10 +210,61 @@ private func appendInlines(
   _ inlines: [InlineNode], to out: inout AttributedString,
   base: AttributeContainer, styles: InlineTextStyles
 ) {
+  var current = base
   for node in inlines {
+    if case .html(let raw) = node, let name = HTMLTag(raw)?.name.lowercased() {
+      switch (name, raw.contains("</")) {
+      case ("sub", false): current = subSuperscript(base, direction: -1); continue
+      case ("sup", false): current = subSuperscript(base, direction: 1); continue
+      case ("sub", true), ("sup", true): current = base; continue
+      default: break
+      }
+    }
     out += node.renderAttributedString(
-      baseURL: nil, textStyles: styles, softBreakMode: .space, attributes: base)
+      baseURL: nil, textStyles: styles, softBreakMode: .space, attributes: current)
   }
+}
+
+// <sub>/<sup>: a smaller run nudged off the baseline (fontProperties.size is
+// resolved to a concrete font by renderAttributedString; baselineOffset passes
+// through). `<br>` stays handled by MarkdownUI; other tags render as literal text.
+private func subSuperscript(_ base: AttributeContainer, direction: CGFloat) -> AttributeContainer {
+  var c = base
+  let size = c.fontProperties?.size ?? 16
+  if var props = c.fontProperties {
+    props.size = size * 0.75
+    c.fontProperties = props
+  }
+  c.baselineOffset = direction * size * 0.3
+  return c
+}
+
+// The <summary>…</summary> text inside a <details> html block.
+private func extractSummary(_ html: String) -> String {
+  guard let open = html.range(of: "<summary", options: [.caseInsensitive]),
+        let gt = html.range(of: ">", range: open.upperBound..<html.endIndex)
+  else { return "" }
+  guard let close = html.range(of: "</summary", options: [.caseInsensitive],
+                               range: gt.upperBound..<html.endIndex)
+  else { return String(html[gt.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines) }
+  return String(html[gt.upperBound..<close.lowerBound])
+    .trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+// Body text between </summary> and </details> for a single-line <details>.
+private func detailsInlineBody(_ html: String) -> String {
+  var start = html.startIndex
+  if let sum = html.range(of: "</summary>", options: [.caseInsensitive]) {
+    start = sum.upperBound
+  } else if let gt = html.range(of: ">") {
+    start = gt.upperBound
+  }
+  var end = html.endIndex
+  if let det = html.range(of: "</details", options: [.caseInsensitive],
+                          range: start..<html.endIndex) {
+    end = det.lowerBound
+  }
+  return String(html[start..<end]).trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
 private func headingScale(_ level: Int) -> CGFloat {
