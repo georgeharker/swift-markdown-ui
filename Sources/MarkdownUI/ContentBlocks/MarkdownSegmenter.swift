@@ -34,10 +34,12 @@ private func entities(for blocks: [BlockNode], style: MarkdownProseStyle) -> [Ma
                     base: style.base(size: style.baseSize, weight: .regular), styles: styles)
 
     case .heading(let level, let inlines):
-      proseSeparator(&prose)
-      appendInlines(inlines, to: &prose,
+      flush()
+      var heading = AttributedString()
+      appendInlines(inlines, to: &heading,
                     base: style.base(size: style.baseSize * headingScale(level), weight: .bold),
                     styles: styles)
+      out.append(.heading(level: level, text: heading))
 
     case .htmlBlock(let content):
       // MarkdownUI treats an html block as a paragraph; unknown tags show as
@@ -74,7 +76,9 @@ private func entities(for blocks: [BlockNode], style: MarkdownProseStyle) -> [Ma
 
     case .blockquote(let children):
       flush()
-      out.append(.blockquote(entities(for: children, style: style)))
+      var quoted = style
+      if let quoteColor = style.quoteColor { quoted.textColor = quoteColor }
+      out.append(.blockquote(entities(for: children, style: quoted)))
     }
   }
   flush()

@@ -11,8 +11,10 @@ import Foundation
 /// The list is a value type (`Hashable`, `Sendable`), so it can be cached or
 /// persisted per message and re-materialized without re-parsing.
 public indirect enum MarkdownEntity: Hashable, Sendable {
-  /// A coalesced run of flowable blocks (paragraphs, headings, html), styled.
+  /// A coalesced run of flowable blocks (paragraphs, html), styled.
   case prose(AttributedString)
+  /// A heading — its own entity so the caller can apply per-level margins.
+  case heading(level: Int, text: AttributedString)
   /// A fenced code block — deferred to the caller's highlighter.
   case code(language: String?, text: String)
   /// A table's structured data (pre-styled cells + alignments).

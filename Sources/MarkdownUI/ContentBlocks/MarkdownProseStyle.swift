@@ -15,6 +15,8 @@ public struct MarkdownProseStyle: Hashable, Sendable {
   /// Inline code font family; `nil` = system monospaced. A custom BODY font has
   /// no monospaced *variant*, so inline code needs an explicit mono FAMILY.
   public var codeFontName: String?
+  /// Blockquote text color; `nil` = inherit `textColor`.
+  public var quoteColor: Color?
   /// Custom body font family (PostScript/registered name). `nil` = system.
   public var fontName: String?
 
@@ -25,6 +27,7 @@ public struct MarkdownProseStyle: Hashable, Sendable {
     codeColor: Color? = nil,
     codeBackground: Color? = nil,
     codeFontName: String? = nil,
+    quoteColor: Color? = nil,
     fontName: String? = nil
   ) {
     self.baseSize = baseSize
@@ -33,6 +36,7 @@ public struct MarkdownProseStyle: Hashable, Sendable {
     self.codeColor = codeColor
     self.codeBackground = codeBackground
     self.codeFontName = codeFontName
+    self.quoteColor = quoteColor
     self.fontName = fontName
   }
 }
