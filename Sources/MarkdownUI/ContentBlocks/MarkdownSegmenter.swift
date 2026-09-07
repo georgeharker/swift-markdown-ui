@@ -9,19 +9,83 @@ import SwiftUI
 /// become structural entities whose text is still styled off-main (the walker
 /// recurses through their children).
 public func markdownEntities(_ markdown: String, style: MarkdownProseStyle) -> [MarkdownEntity] {
-  entities(for: [BlockNode](markdown: markdown), style: style)
+  segmentWithEnds([BlockNode](markdown: markdown), style: style).0
+}
+
+/// Off-main INCREMENTAL segmenter for streaming markdown. Holds the prior parse
+/// + entities; each submit re-parses (cheap cmark), finds the unchanged
+/// top-level block prefix vs the prior parse, keeps the entities that cover it,
+/// and re-segments ONLY the changed tail. Because a stream APPENDS, the tail is
+/// small. An `actor` so its `[BlockNode]` state stays confined off-main (actor
+/// isolation, not Sendable) — only the `[MarkdownEntity]` result (Sendable)
+/// crosses out. Cutting strictly BEFORE the first changed block (`end < p`)
+/// keeps a coalescing prose run from being split when the boundary block moves.
+public actor MarkdownStreamSegmenter {
+  private let style: MarkdownProseStyle
+  private var priorBlocks: [BlockNode] = []
+  private var priorEntities: [MarkdownEntity] = []
+  private var priorEnds: [Int] = []
+
+  public init(style: MarkdownProseStyle) { self.style = style }
+
+  public func reset() {
+    priorBlocks = []
+    priorEntities = []
+    priorEnds = []
+  }
+
+  public func segment(_ markdown: String) -> [MarkdownEntity] {
+    let blocks = [BlockNode](markdown: markdown)
+    var p = 0
+    let common = min(blocks.count, priorBlocks.count)
+    while p < common && blocks[p] == priorBlocks[p] { p += 1 }
+
+    // Keep entities whose end is STRICTLY before the first changed block, so the
+    // re-walk starts on a clean (prose-empty) boundary and any run touching the
+    // change is rebuilt whole.
+    var keptCount = 0
+    var k = 0
+    while keptCount < priorEnds.count && priorEnds[keptCount] < p {
+      k = priorEnds[keptCount]
+      keptCount += 1
+    }
+
+    let (tail, tailEnds) = segmentWithEnds(Array(blocks[k...]), style: style)
+    let entities = Array(priorEntities[0..<keptCount]) + tail
+    priorBlocks = blocks
+    priorEntities = entities
+    priorEnds = Array(priorEnds[0..<keptCount]) + tailEnds.map { $0 + k }
+    return entities
+  }
 }
 
 // MARK: - Recursive walk
 
 private func entities(for blocks: [BlockNode], style: MarkdownProseStyle) -> [MarkdownEntity] {
+  segmentWithEnds(blocks, style: style).0
+}
+
+/// The top-level walk, recording each emitted entity's EXCLUSIVE end block
+/// index. Ends are monotonic; entity j spans blocks[ends[j-1]..<ends[j]] with
+/// ends[-1] = 0. Nested children (list items, blockquotes) recurse via
+/// `entities(for:)` and don't need spans — only the top level is diffed.
+private func segmentWithEnds(
+  _ blocks: [BlockNode], style: MarkdownProseStyle
+) -> ([MarkdownEntity], [Int]) {
   let styles = style.inlineStyles
   var out: [MarkdownEntity] = []
+  var ends: [Int] = []
   var prose = AttributedString()
 
-  func flush() {
+  func emit(_ entity: MarkdownEntity, end: Int) {
+    out.append(entity)
+    ends.append(end)
+  }
+  // A prose run ends at the block that triggered the flush (exclusive).
+  func flush(end: Int) {
     if !prose.characters.isEmpty {
       out.append(.prose(prose))
+      ends.append(end)
       prose = AttributedString()
     }
   }
@@ -35,7 +99,7 @@ private func entities(for blocks: [BlockNode], style: MarkdownProseStyle) -> [Ma
     // htmlBlock(</details>) at blank lines; collect the body between them.
     if case .htmlBlock(let content) = block,
        content.range(of: "<details", options: [.caseInsensitive]) != nil {
-      flush()
+      flush(end: i)
       var summaryText = extractSummary(content)
       var body: [BlockNode] = []
       if content.range(of: "</details", options: [.caseInsensitive]) != nil {
@@ -62,7 +126,7 @@ private func entities(for blocks: [BlockNode], style: MarkdownProseStyle) -> [Ma
       }
       var summary = AttributedString(summaryText.isEmpty ? "Details" : summaryText)
       summary.mergeAttributes(style.base(size: style.baseSize, weight: .semibold))
-      out.append(.details(summary: summary, children: entities(for: body, style: style)))
+      emit(.details(summary: summary, children: entities(for: body, style: style)), end: i)
       continue
     }
 
@@ -73,12 +137,12 @@ private func entities(for blocks: [BlockNode], style: MarkdownProseStyle) -> [Ma
                     base: style.base(size: style.baseSize, weight: .regular), styles: styles)
 
     case .heading(let level, let inlines):
-      flush()
+      flush(end: i)
       var heading = AttributedString()
       appendInlines(inlines, to: &heading,
                     base: style.base(size: style.baseSize * headingScale(level), weight: .bold),
                     styles: styles)
-      out.append(.heading(level: level, text: heading))
+      emit(.heading(level: level, text: heading), end: i + 1)
 
     case .htmlBlock(let content):
       // MarkdownUI treats an html block as a paragraph; unknown tags show as
@@ -89,40 +153,40 @@ private func entities(for blocks: [BlockNode], style: MarkdownProseStyle) -> [Ma
       prose += seg
 
     case .codeBlock(let fenceInfo, let content):
-      flush()
-      out.append(.code(language: fenceInfo, text: content))
+      flush(end: i)
+      emit(.code(language: fenceInfo, text: content), end: i + 1)
 
     case .thematicBreak:
-      flush()
-      out.append(.thematicBreak)
+      flush(end: i)
+      emit(.thematicBreak, end: i + 1)
 
     case .table(let columnAlignments, let rows):
-      flush()
-      out.append(.table(tableModel(columnAlignments, rows, style: style, styles: styles)))
+      flush(end: i)
+      emit(.table(tableModel(columnAlignments, rows, style: style, styles: styles)), end: i + 1)
 
     case .bulletedList(let isTight, let items):
-      flush()
-      out.append(.list(listModel(.bulleted, isTight: isTight, items: items, style: style)))
+      flush(end: i)
+      emit(.list(listModel(.bulleted, isTight: isTight, items: items, style: style)), end: i + 1)
 
     case .numberedList(let isTight, let start, let items):
-      flush()
-      out.append(.list(listModel(.numbered(start: start), isTight: isTight,
-                                 items: items, style: style, start: start)))
+      flush(end: i)
+      emit(.list(listModel(.numbered(start: start), isTight: isTight,
+                           items: items, style: style, start: start)), end: i + 1)
 
     case .taskList(let isTight, let items):
-      flush()
-      out.append(.list(taskListModel(isTight: isTight, items: items, style: style)))
+      flush(end: i)
+      emit(.list(taskListModel(isTight: isTight, items: items, style: style)), end: i + 1)
 
     case .blockquote(let children):
-      flush()
+      flush(end: i)
       var quoted = style
       if let quoteColor = style.quoteColor { quoted.textColor = quoteColor }
-      out.append(.blockquote(entities(for: children, style: quoted)))
+      emit(.blockquote(entities(for: children, style: quoted)), end: i + 1)
     }
     i += 1
   }
-  flush()
-  return out
+  flush(end: blocks.count)
+  return (out, ends)
 }
 
 // MARK: - Structural models
