@@ -59,7 +59,7 @@ public protocol MarkdownContentProtocol {
 ///   }
 /// }
 /// ```
-public struct MarkdownContent: Equatable, MarkdownContentProtocol {
+public struct MarkdownContent: Equatable, Sendable, MarkdownContentProtocol {
   /// Returns a Markdown content value with the sum of the contents of all the container blocks
   /// present in this content.
   ///
