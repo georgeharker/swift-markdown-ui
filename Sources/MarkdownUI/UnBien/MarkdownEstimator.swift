@@ -33,8 +33,13 @@ public struct MarkdownEstimateMetrics: Sendable, Equatable {
   public var codeLines = 0
   /// Distinct fenced blocks.
   public var codeBlocks = 0
-  /// `|`-prefixed table rows.
+  /// `|`-prefixed table rows (separators excluded).
   public var tableRows = 0
+  /// WRAPPED table row-lines: Σ per-row max-wrapped-cell-lines (cells wrap on
+  /// narrow viewports — raw row counts undercounted wide tables 2-3x).
+  public var tableLines = 0
+  /// Columns in the table (from the header row) — 0 when no table.
+  public var tableColumns = 0
   /// `#`-prefixed headings, by level bucket (1...3+).
   public var headings = 0
   /// List-item lines (bulleted or ordered; nesting adds one per line).
@@ -101,7 +106,20 @@ public func markdownEstimateMetrics(
       let isSeparator = line.drop(while: { $0 == " " }).allSatisfy {
         $0 == "|" || $0 == "-" || $0 == ":" || $0 == " " || $0 == "="
       } && line.contains("-")
-      if !isSeparator { m.tableRows += 1 }
+      if !isSeparator {
+        m.tableRows += 1
+        let cells = line.split(separator: "|").map { $0.trimmingCharacters(in: .whitespaces) }
+        let cols = max(1, cells.count)
+        if m.tableColumns == 0 { m.tableColumns = cols }
+        // Wrapped lines for this row: the WIDEST cell's wrap count. Column
+        // widths are unknown pre-render — assume equal shares minus the Grid's
+        // horizontal spacing; proportional body chars ≈ 0.52 × size.
+        let colWidth = max(1, (width - 16 - Double(cols - 1) * 12) / Double(cols))
+        let charWidth = max(0.5, style.baseSize * 0.52)
+        let perCol = max(1, Int(colWidth / charWidth))
+        let rowLines = cells.map { max(1, Int(ceil(Double($0.count) / Double(perCol)))) }.max() ?? 1
+        m.tableLines += rowLines
+      }
       continue
     }
     if let headingLevel = EstimateSupport.headingLevel(line) {
