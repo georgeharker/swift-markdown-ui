@@ -64,7 +64,7 @@ public func markdownEstimateMetrics(
   // makes the wrap factor exact: renderedLines = ceil(chars / charsPerLine),
   // charsPerLine from the mono advance of "0" at the effective code size.
   let codeSize = style.codeSize ?? style.baseSize
-  let monoFont = EstimateSupport.font(size: codeSize, name: style.codeFontName)
+  let monoFont = EstimateSupport.font(size: codeSize, name: style.codeFontName, mono: true)
   let zero = ("0" as NSString).size(withAttributes: [.font: monoFont]).width
   let codeContentWidth = max(1, width - 24)   // minus the code block's padding
   let charsPerLine = max(1, Int(codeContentWidth / max(zero, 0.5)))
@@ -154,9 +154,18 @@ public func markdownEstimateMetrics(
 }
 
 private enum EstimateSupport {
-  static func font(size: Double, name: String?) -> PlatformFont {
+  /// `mono` selects the MONOSPACED system fallback — the renderer sizes code
+  /// with monospacedSystemFont when no family is set; plain systemFont
+  /// (proportional SF) gave wrong line metrics for default-mono setups.
+  static func font(size: Double, name: String?, mono: Bool = false) -> PlatformFont {
     if let name, let named = PlatformFont(name: name, size: size) { return named }
-    return PlatformFont.systemFont(ofSize: size)
+    #if canImport(AppKit)
+    return mono ? NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
+                : NSFont.systemFont(ofSize: size)
+    #else
+    return mono ? UIFont.monospacedSystemFont(ofSize: size, weight: .regular)
+                : UIFont.systemFont(ofSize: size)
+    #endif
   }
 
   /// Wrapped height via boundingRect — single-font layout, no attribute runs
