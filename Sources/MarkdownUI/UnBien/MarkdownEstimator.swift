@@ -95,7 +95,13 @@ public func markdownEstimateMetrics(
     }
     if line.hasPrefix("|") {
       flushProse()
-      m.tableRows += 1
+      // SEPARATOR rows (|---|---:) are ALIGNMENTS, not rendered rows — the
+      // parser strips them; counting them phantom-inflated estimates by one
+      // row (~28pt — the harness table case's entire residual).
+      let isSeparator = line.drop(while: { $0 == " " }).allSatisfy {
+        $0 == "|" || $0 == "-" || $0 == ":" || $0 == " " || $0 == "="
+      } && line.contains("-")
+      if !isSeparator { m.tableRows += 1 }
       continue
     }
     if let headingLevel = EstimateSupport.headingLevel(line) {

@@ -75,7 +75,7 @@ final class MarkdownEstimatorTests: XCTestCase {
     """
     let m = markdownEstimateMetrics(md, style: style, width: 400)
     XCTAssertEqual(m.headings, 1)
-    XCTAssertEqual(m.tableRows, 3, "header + separator + data row")
+    XCTAssertEqual(m.tableRows, 2, "header + data row — separator stripped")
     XCTAssertEqual(m.listItems, 4, "3 bullets + 1 ordered")
     XCTAssertEqual(m.quoteLines, 1)
     XCTAssertEqual(m.proseBlocks, 1, "only the tail paragraph")
