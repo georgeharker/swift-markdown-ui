@@ -54,6 +54,18 @@ public func markdownEstimateMetrics(
   guard width > 0, !markdown.isEmpty else { return m }
 
   let bodyFont = EstimateSupport.font(size: style.baseSize, name: style.fontName)
+  // WRAP-AWARE code accounting (2026-09-10): the renderer WRAPS long code
+  // lines (no horizontal scroll), so raw line counts undercount. Monospace
+  // makes the wrap factor exact: renderedLines = ceil(chars / charsPerLine),
+  // charsPerLine from the mono advance of "0" at the effective code size.
+  let codeSize = style.codeSize ?? style.baseSize
+  let monoFont = EstimateSupport.font(size: codeSize, name: style.codeFontName)
+  let zero = ("0" as NSString).size(withAttributes: [.font: monoFont]).width
+  let codeContentWidth = max(1, width - 24)   // minus the code block's padding
+  let charsPerLine = max(1, Int(codeContentWidth / max(zero, 0.5)))
+  func wrappedCodeLines(_ line: String) -> Int {
+    max(1, Int(ceil(Double(line.count) / Double(charsPerLine))))
+  }
   var prose = ""
   var inFence = false
 
@@ -74,7 +86,7 @@ public func markdownEstimateMetrics(
       continue
     }
     if inFence {
-      m.codeLines += 1
+      m.codeLines += wrappedCodeLines(String(rawLine))
       continue
     }
     if line.isEmpty {

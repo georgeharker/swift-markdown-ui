@@ -102,4 +102,15 @@ final class MarkdownEstimatorTests: XCTestCase {
     XCTAssertEqual(m.headings, 0)
     XCTAssertEqual(m.proseBlocks, 1)
   }
+
+  func testLongCodeLinesWrapCount() {
+    // A 300-char line at ~90 chars/line (width 400, mono ~7pt advance on a
+    // 15pt mono) must count as MULTIPLE rendered lines — the renderer wraps.
+    let long = String(repeating: "x", count: 300)
+    let m = markdownEstimateMetrics("```\n\(long)\n```", style: style, width: 400)
+    XCTAssertGreaterThan(m.codeLines, 2, "wrapped lines, not raw lines")
+    // And a narrow width wraps MORE.
+    let narrow = markdownEstimateMetrics("```\n\(long)\n```", style: style, width: 150)
+    XCTAssertGreaterThan(narrow.codeLines, m.codeLines)
+  }
 }

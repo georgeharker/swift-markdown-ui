@@ -19,6 +19,11 @@ public struct MarkdownProseStyle: Hashable, Sendable {
   public var quoteColor: Color?
   /// Custom body font family (PostScript/registered name). `nil` = system.
   public var fontName: String?
+  /// BLOCK-code point size for the analytic tier (the renderer sizes block
+  /// code from its own typography, which may differ from `baseSize`).
+  /// `nil` = same as `baseSize` (additive; estimation only — the styled
+  /// render path never reads this).
+  public var codeSize: Double?
 
   public init(
     baseSize: CGFloat = 16,
@@ -28,7 +33,8 @@ public struct MarkdownProseStyle: Hashable, Sendable {
     codeBackground: Color? = nil,
     codeFontName: String? = nil,
     quoteColor: Color? = nil,
-    fontName: String? = nil
+    fontName: String? = nil,
+    codeSize: Double? = nil
   ) {
     self.baseSize = baseSize
     self.textColor = textColor
@@ -38,5 +44,6 @@ public struct MarkdownProseStyle: Hashable, Sendable {
     self.codeFontName = codeFontName
     self.quoteColor = quoteColor
     self.fontName = fontName
+    self.codeSize = codeSize
   }
 }
