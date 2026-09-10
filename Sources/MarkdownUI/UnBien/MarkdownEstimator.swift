@@ -77,7 +77,10 @@ public func markdownEstimateMetrics(
   func flushProse() {
     let trimmed = prose.trimmingCharacters(in: .newlines)
     guard !trimmed.isEmpty else { return }
-    m.textHeight += EstimateSupport.wrappedHeight(trimmed, font: bodyFont, width: width)
+    // INLINE-CODE spans: the renderer replaces backtick GLYPHS with chip
+    // chrome — measuring them as text width overestimates wrapping.
+    let stripped = trimmed.replacingOccurrences(of: "`", with: "")
+    m.textHeight += EstimateSupport.wrappedHeight(stripped, font: bodyFont, width: width)
     m.proseBlocks += 1
     prose = ""
   }
@@ -117,7 +120,9 @@ public func markdownEstimateMetrics(
         let colWidth = max(1, (width - 16 - Double(cols - 1) * 12) / Double(cols))
         let charWidth = max(0.5, style.baseSize * 0.52)
         let perCol = max(1, Int(colWidth / charWidth))
-        let rowLines = cells.map { max(1, Int(ceil(Double($0.count) / Double(perCol)))) }.max() ?? 1
+        let rowLines = cells.map {
+          max(1, Int(ceil(Double($0.replacingOccurrences(of: "`", with: "").count) / Double(perCol))))
+        }.max() ?? 1
         m.tableLines += rowLines
       }
       continue
