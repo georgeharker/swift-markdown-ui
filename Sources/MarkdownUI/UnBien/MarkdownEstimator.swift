@@ -77,9 +77,24 @@ public func markdownEstimateMetrics(
   func flushProse() {
     let trimmed = prose.trimmingCharacters(in: .newlines)
     guard !trimmed.isEmpty else { return }
-    // INLINE-CODE spans: the renderer replaces backtick GLYPHS with chip
-    // chrome — measuring them as text width overestimates wrapping.
-    let stripped = trimmed.replacingOccurrences(of: "`", with: "")
+    // SOFT BREAKS: a single newline inside a paragraph renders as a space, so
+    // the lines are measured joined. A hard break (two trailing spaces or a
+    // trailing backslash) still starts a new line.
+    var joined = ""
+    for (index, line) in trimmed.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+      if index > 0 {
+        joined += (joined.hasSuffix("  ") || joined.hasSuffix("\\")) ? "\n" : " "
+      }
+      joined += line
+    }
+    // INLINE MARKUP the renderer draws as style, not glyphs: inline-code
+    // backticks (chip chrome), strong-emphasis markers, and a link's target
+    // (only its text shows). Measuring them as text overestimates wrapping.
+    let stripped = joined
+      .replacingOccurrences(of: "`", with: "")
+      .replacingOccurrences(of: "**", with: "")
+      .replacingOccurrences(of: "__", with: "")
+      .replacingOccurrences(of: #"\[([^\]]*)\]\([^)]*\)"#, with: "$1", options: .regularExpression)
     m.textHeight += EstimateSupport.wrappedHeight(stripped, font: bodyFont, width: width)
     m.proseBlocks += 1
     prose = ""
